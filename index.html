@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>IdiotPassword</title>
+	<meta name="description" value="Convert passwords for websites with obsolete password policies">
+	<link rel="icon" href="favicon.svg">
+	<style>
+		html {
+			font: 14pt/1.5 sans-serif;
+			background: linear-gradient(to right, #dfd7d0, #d0d7df);
+			color: #000;
+		}
+
+		body {
+			margin: 0;
+		}
+
+		footer, header {
+			margin: 1em;
+		}
+
+		header h1 {
+			margin: 0;
+		}
+
+		input:focus, output:focus {
+			outline: solid orange 2px;
+		}
+
+		main {
+			overflow: hidden;
+			background: #fff;
+		}
+
+		main form label {
+			display: block;
+			margin: 1em;
+		}
+
+		main form input, main form output {
+			display: block;
+			font-size: 18pt;
+			box-sizing: border-box;
+			width: 100%;
+			min-height: 1em;
+		}
+
+		main form output {
+			font-family: monospace;
+		}
+
+		main form output:empty::before {
+			font-family: sans-serif;
+			content: 'Unknown so far';
+			color: #808080;
+			font-style: italic;
+		}
+	</style>
+</head>
+<body>
+	<header>
+		<h1>IdiotPassword<sup><em>beta</em></sup></h1>
+	</header>
+	<main>
+		<form>
+			<label>The password you like <input type="password" name="input-password" autofocus aria-required="true"></label>
+			<label>For the website (optional) <input name="input-url" type="url"></label>
+			<label>Your IdiotPassword <output name="idiot-password" tabindex="0"></output></label>
+		</form>
+	</main>
+	<script>
+		// This code messes with your passwords and it's natural you'd like to examine the code.
+		// Here, the unminified, somewhat commented code.
+		// Source filed == built files, just like in the good ol' days.
+
+		const formElement = document.querySelector('form');
+		const inputPasswordElement = formElement.querySelector('[name=input-password]');
+		const inputUrlElement = formElement.querySelector('[name=input-url]');
+		const outputElement = formElement.querySelector('[name=idiot-password]');
+
+		const alphabets = {
+			any: [],
+			upper: [],
+			lower: [],
+			digit: [],
+			special: [],
+		}
+
+		for (let i = 33; i < 127; i++) {
+			const ch = String.fromCharCode(i);
+			if (/[`"'\\<>]/.test(ch)) {
+				// Avoid "too special" characters
+				continue;
+			}
+
+			alphabets.any.push(ch)
+			if (/[A-Z]/.test(ch)) {
+				alphabets.upper.push(ch);
+			} else if (/[a-z]/.test(ch)) {
+				alphabets.lower.push(ch);
+			} else if (/[0-9]/.test(ch)) {
+				alphabets.digit.push(ch);
+			} else {
+				alphabets.special.push(ch);
+			}
+		}
+
+		// Divide and return modulo
+		// Treats the arr as a big integer, mutates arr in place, returns modulo
+		function divmod8(arr, divisor) {
+			let modulo = 0;
+			for (let i = arr.length; i-- > 0;) {
+				const divident = arr[i] + modulo * 0x100; // carry
+				modulo = divident % divisor;
+				if (modulo === divident && i === arr.length - 1) {
+					arr.pop();
+				} else {
+					arr[i] = (divident - modulo) / divisor;
+				}
+			}
+			return modulo;
+		}
+
+		function hash(inputPassword, domain) {
+			const textEncoder = new TextEncoder();
+			const inputPasswordBytes = textEncoder.encode(inputPassword);
+			const domainBytes = textEncoder.encode(domain);
+
+			// The layout is [Uint32 pwd len] [Bytes pwd] [Uint32 domain len] [Bytes domain]
+			const uia = new Uint8Array(inputPasswordBytes.length + domainBytes.length + 8);
+			const dataView = new DataView(uia.buffer);
+			dataView.setUint32(0, inputPasswordBytes.length);
+			dataView.setUint32(inputPasswordBytes.length + 4, domainBytes.length);
+			uia.set(inputPasswordBytes, 4);
+			uia.set(domainBytes, inputPasswordBytes.length + 8);
+
+			return crypto.subtle.digest('SHA-512', uia).then(hash => new Uint8Array(hash));
+		}
+
+		function makePassword(uia) {
+			const bytes = Array.from(uia);
+			const passwordTemplate = [
+				'any', 'any', 'any', 'any',	'any', 'any',
+				'any', 'any', 'any', 'any', 'any', 'any',
+			];
+
+			// The password template should contain at least one
+			// Char from each alphabet: decide the insertion point
+			passwordTemplate.splice(divmod8(bytes, passwordTemplate.length + 1), 0, 'upper');
+			passwordTemplate.splice(divmod8(bytes, passwordTemplate.length + 1), 0, 'lower');
+			passwordTemplate.splice(divmod8(bytes, passwordTemplate.length + 1), 0, 'digit');
+			passwordTemplate.splice(divmod8(bytes, passwordTemplate.length + 1), 0, 'special');
+
+			// Filling the password
+			const password = [];
+
+			for (let i = 0; i < passwordTemplate.length; i++) {
+				const alphabet = alphabets[passwordTemplate[i]];
+				// Take extra precaution not to generate two same adjacent characters.
+				// Yes, this is a yet another idiotic rule that, in fact, gives
+				// an adversary more advantage.
+				const previousChar = password[i - 1];
+				const index = alphabet.indexOf(previousChar);
+
+				let range = alphabet.length;
+				let offset = 0;
+
+				if (index !== -1) {
+					// There's a chance to generate the same char as the previous one.
+					// Limit the range to (length - 1) and shift everything by (index + 1)
+					// So we can never get index after this operation
+					range = alphabet.length - 1;
+					offset = index + 1;
+				}
+
+				password[i] = alphabet[
+					(divmod8(bytes, range) + offset) % alphabet.length
+				];
+			}
+
+			return password.join('');
+		}
+
+		// Split string by whitespaces and try to extract
+		// the domain name from the first chunk
+		function extractDomain(url) {
+			parts = url.trim().split(/\s/);
+			if (!parts[0]) {
+				return '';
+			}
+			// Append protocol if needed
+			if (!/^\w?:/.test(parts[0])) {
+				parts[0] = 'https://' + parts[0];
+			}
+			parts[0] = new URL(parts[0]).hostname.toLowerCase().replace(/^www./, '')
+			return parts.join(' ');
+		}
+
+		function update() {
+			const inputPassword = inputPasswordElement.value.trim();
+			if (!inputPassword) {
+				outputElement.textContent = '';
+				return;
+			}
+			const domain = extractDomain(inputUrlElement.value);
+
+			hash(inputPassword, domain).then(makePassword).then(
+				password => { outputElement.textContent = password; },
+				err => {
+					outputElement.textContent = '';
+					console.error(err);
+				}
+			);
+		}
+
+		inputPasswordElement.addEventListener('input', update);
+		inputUrlElement.addEventListener('input', update);
+		update();
+
+		formElement.addEventListener('submit', e => {
+			e.preventDefault();
+			update();
+		});
+
+		outputElement.addEventListener('focus', e => {
+			window.getSelection().selectAllChildren(outputElement);
+		});
+	</script>
+	<footer>
+		<p><strong>Have you ever been informed that the password you picked is invalid?</strong> It needs special characters and stuff. Have you ever thought, <em>Just let me use my password, you idiots</em>?</p>
+		<p>IdiotPassword lets you use any password you like for any service. Cyrillic, Chinese, Emoji, use whatever you want!</p>
+		<p>Based on a password you like it generates the password that passes the (often obsolete) password guidelines: one capital letter, one digit, no consecutive same charaters, etc.</p>
+		<p>All conversions are held in your browser, <strong>nothing is ever sent to any server</strong>.</p>
+		<p>This is a beta version. The conversion algorithm may be changed in the future!</p>
+	</footer>
+</body>
+</html>
