@@ -240,7 +240,7 @@
 	</script>
 	<footer>
 		<h2>Why?</h2>
-		<p>Making up a good password is hard. It's even harder when wesites or sevices use obsolete (and sometimes idiotic) password policies.</p>
+		<p>Making up a good password is hard. It's even harder when websites or sevices use obsolete (and sometimes idiotic) password policies.</p>
 		<p>A good password is not about special chars. It's about informational entropy. Of course, there's an <a href="https://xkcd.com/936/" rel="external noopener" target="_blank">XKCD comic</a> about that.</p>
 		<p>This service lets you use the password you like (easy memorizable, with whitespaces, Cyrillic, Chinese, emoji, etc.) and get the IdiotPassword <em>they</em> like:</p>
 		<ul>
@@ -248,17 +248,17 @@
 			<li>No duplicate consecutive charaters</li>
 			<li><em>You know other dumb restictions? Ping me in <a href="https://twitter.com/subzey" rel="external noopener" target="_blank">Twitter</a> or <a href="https://github.com/subzey/idiotpassword/issues" rel="external noopener" target="_blank">GH issues</a>!</em></li>
 		</ul>
-		<p>Next time you plug in the same data you get the same IdiotPassword, so you have to memorize only the password you like.</p>
+		<p>Next time you enter the same data you get the same IdiotPassword, so you have to memorize only the password you like.</p>
 		<p><em>This is a beta version. The conversion algorithm may be changed in the future!</em></p>
 		<h2>How?</h2>
-		<p>IdiotPassword uses cryptographic hashes to convert one password into another. All the computations are held <strong>in your browser</strong> with no servers.</p>
+		<p>IdiotPassword uses cryptographic hashes to convert one password into another. All the computations are held <strong>entirely in your browser</strong> not touching any servers.</p>
 		<p>(That's also the reason why IdiotPassword requires a modern browser)</p>
 		<p>The implementaion is not a secret. In fact, if you're a programmer, I invite you to check the code. Just open up the view-source, it's uncompressed, readable and commented.</p>
 		<h2>Is it secure?</h2>
 		<p><strong>Your your input password is weak, the resulting password would also be weak!</strong></p>
-		<p>IdiotPassword just takes one string of bytes, shuffles bits and bytes around, and makes another string. It cannot make a strong password from a weak one. There's no login field, no authorization, no server requests.</p>
-		<p>An adversary can also plug a weak password, <q><code>1</code></q>, into this field and get <q><code>e[w:~yTj6nu.@dm(</code></q>, just like you or anybody else. Using a good input password is very important.</p>
-		<p>I won't limit you in picking any password you like, though, even the short and insecure one. That would defeat the very purpose of this service.</p>
+		<p>IdiotPassword just takes one string of bytes, shuffles bits and bytes around, and makes another string. It cannot make a strong password from a weak one.</p>
+		<p>There's no login field, no authorization, no server requests. An adversary can also plug a weak password, <q><code>1</code></q>, into this field and get <q><code>e[w:~yTj6nu.@dm(</code></q>, just like you or anybody else. Using a good input password is very important.</p>
+		<p>I won't limit you in picking any password you like, though. Even the short and insecure one. Setting limits would defeat the very purpose of IdiotPassword.</p>
 </footer>
 </body>
 </html>
